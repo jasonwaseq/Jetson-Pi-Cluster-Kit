@@ -1,18 +1,21 @@
-# Cluster Kit
+# Jetson Pi Cluster Kit
 
-This repository turns a Jetson Orin Nano into the controller for a 10-node Raspberry Pi cluster on `10.0.0.0/24`.
+Jetson Pi Cluster Kit turns a Jetson Orin Nano into a controller for a Raspberry Pi compute cluster on a private Ethernet fabric. It provides repeatable setup scripts for Incus, Slurm, Munge, and cluster diagnostics so the Jetson can manage and observe the Pi fleet from one place.
 
-It includes:
+## Features
 
-- Incus installation across the Pi nodes
-- Jetson-side Incus remote registration
-- Optional Incus clustering across the Pis
-- Slurm + Munge setup with the Jetson as controller
-- Cluster health checks and network debug helpers
-- Fan-out command execution and diagnostic collection
+- Incus installation on every SSH-reachable Pi
+- Jetson-side Incus remote registration for each Pi
+- Optional full Incus clustering across the Pis
+- Slurm controller setup on the Jetson with Pi worker enrollment
+- Munge key generation and distribution
+- Health checks for ping, SSH, Incus, Slurm, and Munge
+- Port probes, live monitoring, remote command fan-out, and diagnostic collection
 
-## Repository layout
+## Repository Layout
 
+- `bin/preflight.sh`: validate local dependencies, interface visibility, and node reachability
+- `bin/bootstrap_cluster.sh`: one-command setup wrapper for preflight, Incus mesh, and Slurm
 - `bin/setup_incus_mesh.sh`: install Incus on all SSH-reachable Pis and add them as Incus remotes on the Jetson
 - `bin/setup_incus_cluster.sh`: optional Incus cluster bootstrap across the Pi nodes
 - `bin/setup_slurm_cluster.sh`: install Munge and Slurm and generate a cluster-wide `slurm.conf`
@@ -24,33 +27,46 @@ It includes:
 - `config/cluster.env.example`: example inventory and settings file
 - `lib/common.sh`: shared helpers for SSH, SCP, ping, ports, and host inventory
 
-## Setup
+## Requirements
 
-1. Clone the repository onto the Jetson.
-2. Create your local config file:
+- Jetson host running Ubuntu with `sudo`
+- Raspberry Pis reachable from the Jetson over Ethernet
+- Password-based SSH access from the Jetson to the Pis for initial setup
+- Internet access on nodes when installing packages
+- A local config file at `config/cluster.env`
+
+## Quick Start
 
 ```bash
+git clone git@github.com:jasonwaseq/Jetson-Pi-Cluster-Kit.git
+cd Jetson-Pi-Cluster-Kit
 cp config/cluster.env.example config/cluster.env
+chmod +x bin/*.sh
 ```
 
-3. Edit `config/cluster.env` and set:
+Edit `config/cluster.env` and set:
+
 - `SSH_USER`
 - `PI_PASSWORD`
 - `INCUS_TRUST_PASSWORD`
 - any node names or IPs you want to change
 
-4. Make the scripts executable:
+Run a readiness check:
 
 ```bash
-chmod +x bin/*.sh
+bin/preflight.sh
+bin/check_cluster.sh
 ```
 
-## Recommended workflow
-
-Run these from the Jetson:
+Run the standard setup path:
 
 ```bash
-bin/check_cluster.sh
+bin/bootstrap_cluster.sh
+```
+
+Or run the major steps manually:
+
+```bash
 bin/setup_incus_mesh.sh
 bin/setup_slurm_cluster.sh
 ```
@@ -61,7 +77,33 @@ If you want a full Incus cluster instead of separate Incus nodes with Jetson rem
 bin/setup_incus_cluster.sh
 ```
 
-## Publishing to GitHub
+## Typical Operations
+
+Watch cluster status:
+
+```bash
+bin/watch_cluster.sh 10
+```
+
+Check important ports:
+
+```bash
+bin/check_ports.sh 22 8443 6817 6818
+```
+
+Run a command on every reachable Pi:
+
+```bash
+bin/run_on_all.sh "hostname && uptime"
+```
+
+Collect diagnostics into timestamped files:
+
+```bash
+bin/collect_diagnostics.sh
+```
+
+## GitHub Safety
 
 This repository is prepared so secrets stay local:
 
@@ -77,12 +119,13 @@ git status
 
 You should not see `config/cluster.env` in the tracked file list.
 
-## Current cluster note
+## Current Cluster Note
 
 `10.0.0.172` is currently reachable by ping but not by SSH. The setup scripts skip SSH-unreachable nodes, so that Pi will not be configured until SSH is fixed.
 
-## Design notes
+## Design Notes
 
 - Slurm is configured with the Jetson as controller and the Pis as workers.
 - The Incus mesh setup is the safer default.
 - Full Incus clustering is more sensitive to node availability and should be used only after the network is stable.
+- The toolkit is intentionally shell-based so it can be audited and modified quickly on the Jetson itself.
