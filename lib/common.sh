@@ -144,9 +144,13 @@ run_remote_sudo_script() {
   local script="$2"
   sshpass -p "${PI_PASSWORD}" ssh "${SSH_OPTS[@]}" "${SSH_USER}@${ip}" "bash -s" <<EOF
 set -euo pipefail
-printf '%s\n' '${PI_PASSWORD}' | sudo -S bash <<'REMOTE_EOF'
+tmp_script="/tmp/cluster-kit-\$\$.sh"
+cat > "\${tmp_script}" <<'REMOTE_EOF'
 ${script}
 REMOTE_EOF
+chmod 700 "\${tmp_script}"
+printf '%s\n' '${PI_PASSWORD}' | sudo -S bash -eu "\${tmp_script}"
+rm -f "\${tmp_script}"
 EOF
 }
 

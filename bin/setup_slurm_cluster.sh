@@ -11,6 +11,7 @@ require_binary sshpass sudo awk sed grep
 GENERATED_DIR="${SCRIPT_DIR}/../generated"
 SLURM_CONF="${GENERATED_DIR}/slurm.conf"
 mkdir -p "${GENERATED_DIR}"
+CONTROLLER_HOSTNAME="$(hostname -s)"
 
 log "Installing local Slurm controller dependencies on the Jetson"
 ensure_local_packages sshpass munge libmunge2 libmunge-dev slurmctld slurm-client slurmd slurm-wlm-basic-plugins
@@ -18,7 +19,7 @@ ensure_local_packages sshpass munge libmunge2 libmunge-dev slurmctld slurm-clien
 log "Ensuring controller-side hosts entries are present"
 ensure_hosts_block "" "local"
 
-if [[ ! -f /etc/munge/munge.key ]]; then
+if ! sudo test -f /etc/munge/munge.key; then
   log "Generating MUNGE key on the Jetson"
   sudo /usr/sbin/mungekey
 fi
@@ -29,6 +30,11 @@ sudo chmod 0755 /run/munge
 sudo chmod 0400 /etc/munge/munge.key
 sudo systemctl enable munge
 sudo systemctl restart munge
+
+MUNGE_KEY_TMP="$(mktemp)"
+sudo cp /etc/munge/munge.key "${MUNGE_KEY_TMP}"
+sudo chown "${USER}:${USER}" "${MUNGE_KEY_TMP}"
+chmod 0600 "${MUNGE_KEY_TMP}"
 
 reachable_ips=()
 reachable_names=()
@@ -54,11 +60,15 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y munge libmunge2 libmunge-dev s
 mkdir -p ${SLURM_SPOOLDIR}
 chown slurm:slurm ${SLURM_SPOOLDIR}
 chmod 0755 ${SLURM_SPOOLDIR}
+if command -v ufw >/dev/null 2>&1; then
+  ufw allow 6817/tcp || true
+  ufw allow 6818/tcp || true
+fi
 systemctl enable munge
 "
 
   ensure_hosts_block "${ip}" "remote"
-  scp_to_node "/etc/munge/munge.key" "${ip}" "/tmp/munge.key"
+  scp_to_node "${MUNGE_KEY_TMP}" "${ip}" "/tmp/munge.key"
   run_remote_sudo_script "${ip}" "
 cp /tmp/munge.key /etc/munge/munge.key
 chown munge:munge /etc/munge/munge.key
@@ -77,12 +87,14 @@ systemctl restart munge
   reachable_names+=("${name}")
 done
 
+rm -f "${MUNGE_KEY_TMP}"
+
 (( ${#node_lines[@]} > 0 )) || die "No SSH-reachable Pi nodes available for Slurm setup"
 
 log "Writing generated Slurm config to ${SLURM_CONF}"
 {
   printf 'ClusterName=%s\n' "${SLURM_CLUSTER_NAME}"
-  printf 'SlurmctldHost=%s(%s)\n' "${JETSON_HOSTNAME}" "${JETSON_CLUSTER_IP}"
+  printf 'SlurmctldHost=%s(%s)\n' "${CONTROLLER_HOSTNAME}" "${JETSON_CLUSTER_IP}"
   printf 'MpiDefault=none\n'
   printf 'ProctrackType=proctrack/cgroup\n'
   printf 'ReturnToService=2\n'
