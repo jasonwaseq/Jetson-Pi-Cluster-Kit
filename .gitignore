@@ -4,12 +4,14 @@ config/cluster.env
 # Generated output
 generated/
 diagnostics/
+tmp/
 
 # Shell and editor noise
 *.log
 *.swp
 *.swo
 *~
+*.deb
 
 # OS noise
 .DS_Store

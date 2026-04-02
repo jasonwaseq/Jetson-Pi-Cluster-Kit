@@ -64,6 +64,14 @@ Run the standard setup path:
 bin/bootstrap_cluster.sh
 ```
 
+Current tested state:
+
+- Jetson controller hostname: `jetson-desktop`
+- Cluster network: `10.0.0.0/24`
+- Incus remotes registered: `pi1` through `pi10`
+- Slurm partition: `pi`
+- Slurm node state after bring-up: all 10 nodes `IDLE`
+
 Or run the major steps manually:
 
 ```bash
@@ -103,6 +111,18 @@ Collect diagnostics into timestamped files:
 bin/collect_diagnostics.sh
 ```
 
+Run a simple Slurm job:
+
+```bash
+srun -N 2 -w pi1,pi2 hostname
+```
+
+Run a simple Incus test:
+
+```bash
+incus --target pi1 launch images:debian/12 testbox
+```
+
 ## GitHub Safety
 
 This repository is prepared so secrets stay local:
@@ -119,9 +139,13 @@ git status
 
 You should not see `config/cluster.env` in the tracked file list.
 
-## Current Cluster Note
+## Operational Notes
 
-`10.0.0.172` is currently reachable by ping but not by SSH. The setup scripts skip SSH-unreachable nodes, so that Pi will not be configured until SSH is fixed.
+- The current working controller hostname is `jetson-desktop`, and the generated `slurm.conf` uses that hostname.
+- The Pi hostnames were aligned to `pi1` through `pi10` so Slurm can map workers correctly.
+- The Jetson controller Slurm packages were upgraded to match the Pi worker Slurm version `22.05.8`. Mixed Slurm versions did not work.
+- Pis with `ufw` enabled need `8443/tcp`, `6817/tcp`, and `6818/tcp` open for Incus and Slurm.
+- The Incus mesh setup is the default supported path in this repository. It was validated end to end on the live cluster.
 
 ## Design Notes
 
