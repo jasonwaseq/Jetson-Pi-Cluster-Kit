@@ -1,0 +1,15 @@
+# Local secrets
+config/cluster.env
+
+# Generated output
+generated/
+diagnostics/
+
+# Shell and editor noise
+*.log
+*.swp
+*.swo
+*~
+
+# OS noise
+.DS_Store
